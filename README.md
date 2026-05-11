@@ -15,7 +15,7 @@ App_Monopoly/
 
 ### Opción 1: Abrir directamente en el navegador
 ```bash
-1. Navegar a la carpeta c:\Users\bueno\App_Monopoly\
+1. Navegar a la carpeta c:\App_Monopoly\
 2. Hacer doble clic en monopoly_banco_electronico.html
 3. ¡El juego se abrirá en tu navegador predeterminado!
 ```
@@ -24,7 +24,7 @@ App_Monopoly/
 ```bash
 1. Abrir Chrome, Firefox, Edge o Safari
 2. Presionar Ctrl+O (Cmd+O en Mac)
-3. Navegar a: c:\Users\bueno\App_Monopoly\monopoly_banco_electronico.html
+3. Navegar a: c:\App_Monopoly\monopoly_banco_electronico.html
 4. Seleccionar y abrir
 ```
 
