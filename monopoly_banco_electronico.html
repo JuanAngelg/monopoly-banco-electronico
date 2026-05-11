@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monopoly Banco Electrónico - Análisis Numérico</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    
+    #root { padding: 12px; max-width: 1400px; margin: 0 auto; }
+    
+    /* Components */
+    .btn {
+      cursor: pointer; border: 1px solid #475569; border-radius: 6px;
+      background: #1e293b; color: #e2e8f0; padding: 8px 16px;
+      font-size: 13px; font-weight: 500; transition: all 0.2s;
+    }
+    .btn:hover { background: #334155; }
+    .btn-primary { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-success { background: #10b981; border-color: #10b981; color: #fff; }
+    .btn-success:hover { background: #059669; }
+    .btn-danger { background: #ef4444; border-color: #ef4444; color: #fff; }
+    .btn-warning { background: #f59e0b; border-color: #f59e0b; color: #000; }
+    
+    .card {
+      background: #1e293b; border: 1px solid #334155;
+      border-radius: 8px; padding: 12px;
+    }
+    .panel {
+      background: #0f172a; border: 1px solid #334155;
+      border-radius: 6px; padding: 10px;
+    }
+    .tag {
+      display: inline-flex; align-items: center;
+      padding: 4px 12px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; border: 1px solid;
+    }
+    .tag-success { background: #064e3b; color: #86efac; border-color: #10b981; }
+    .tag-warning { background: #78350f; color: #fcd34d; border-color: #f59e0b; }
+    .tag-danger { background: #7f1d1d; color: #fca5a5; border-color: #ef4444; }
+    
+    .sec { color: #94a3b8; }
+    
+    /* Layout */
+    .setup-container {
+      max-width: 500px; margin: 0 auto; padding: 2rem 1rem;
+      text-align: center;
+    }
+    .game-container {
+      display: grid; grid-template-columns: 1fr 280px; gap: 12px;
+    }
+    .board-grid {
+      display: grid; grid-template-columns: repeat(10, 1fr);
+      gap: 2px; padding: 4px; background: #0f172a;
+      border-radius: 8px;
+    }
+    .space {
+      background: #334155; border: 1px solid #475569;
+      border-radius: 4px; padding: 4px;
+      min-height: 60px; position: relative;
+      font-size: 8.5px; display: flex; flex-direction: column;
+      justify-content: flex-start;
+    }
+    .space.owned { border-top: 4px solid; }
+    .space-name { font-weight: 600; line-height: 1.2; margin-bottom: 2px; }
+    .space-price { color: #94a3b8; font-size: 8px; margin-bottom: 1px; }
+    .space-rent { color: #fcd34d; font-size: 8px; margin-bottom: 1px; }
+    .space-owner { width: 8px; height: 8px; border-radius: 50%; margin-top: 2px; }
+    .space-tokens { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 2px; }
+    
+    .chart { width: 100%; height: 100px; margin: 10px 0; }
+    
+    /* Titles */
+    h1 { font-size: 24px; font-weight: 600; margin: 12px 0 4px; }
+    h2 { font-size: 16px; font-weight: 600; margin: 12px 0 8px; }
+    p { margin: 6px 0; line-height: 1.5; }
+    .subtitle { color: #94a3b8; font-size: 13px; }
+    
+    /* Numeric method panel */
+    .num-method {
+      border-left: 3px solid #3b82f6;
+      background: #1e293b;
+    }
+    .num-method-header {
+      display: flex; justify-content: space-between;
+      align-items: center; margin-bottom: 10px;
+    }
+    .coefficient-display {
+      background: #0f172a; padding: 8px;
+      border-radius: 4px; font-family: monospace;
+      font-size: 11px; color: #60a5fa; margin: 8px 0;
+    }
+    
+    /* Scrollable areas */
+    .scroll { max-height: 200px; overflow-y: auto; }
+    .log-entry { font-size: 10px; color: #94a3b8; margin-bottom: 3px; line-height: 1.3; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// MONOPOLY BANCO ELECTRÓNICO CON TÉCNICA NUMÉRICA
+// Método: Ajuste Polinomial por Mínimos Cuadrados (Grado 2)
+// Lenguaje: JavaScript puro (sin librerías)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PARTE 1: MÉTODO NUMÉRICO - AJUSTE POLINOMIAL
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Eliminación Gaussiana con Pivoteo Parcial
+ * Resuelve el sistema Ax = b mediante eliminación gaussiana
+ * @param {number[][]} A - Matriz de coeficientes
+ * @param {number[]} b - Vector de términos independientes
+ * @returns {number[]} - Vector solución x
+ */
+function gaussianElimination(A, b) {
+  const n = b.length;
+  const matrix = A.map((row, i) => [...row, b[i]]);
+  
+  // Eliminación hacia adelante con pivoteo parcial
+  for (let col = 0; col < n; col++) {
+    // Encontrar pivote máximo en la columna actual
+    let maxRow = col;
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(matrix[row][col]) > Math.abs(matrix[maxRow][col])) {
+        maxRow = row;
+      }
+    }
+    
+    // Intercambiar filas
+    [matrix[col], matrix[maxRow]] = [matrix[maxRow], matrix[col]];
+    
+    // Evitar división por cero
+    if (Math.abs(matrix[col][col]) < 1e-12) continue;
+    
+    // Hacer ceros debajo del pivote
+    for (let row = col + 1; row < n; row++) {
+      const factor = matrix[row][col] / matrix[col][col];
+      for (let j = col; j <= n; j++) {
+        matrix[row][j] -= factor * matrix[col][j];
+      }
+    }
+  }
+  
+  // Sustitución hacia atrás
+  const solution = Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    solution[i] = matrix[i][n];
+    for (let j = i + 1; j < n; j++) {
+      solution[i] -= matrix[i][j] * solution[j];
+    }
+    if (Math.abs(matrix[i][i]) > 1e-12) {
+      solution[i] /= matrix[i][i];
+    }
+  }
+  
+  return solution;
+}
+
+/**
+ * Ajuste Polinomial por Mínimos Cuadrados
+ * Calcula los coeficientes del polinomio que mejor se ajusta a los datos
+ * Resuelve: AᵀA·c = Aᵀb
+ * @param {[number, number][]} points - Array de puntos [x, y]
+ * @param {number} degree - Grado del polinomio (default: 2)
+ * @returns {number[]|null} - Coeficientes [c0, c1, c2, ...] o null si no hay suficientes datos
+ */
+function polynomialFit(points, degree = 2) {
+  if (points.length < degree + 1) return null;
+  
+  const n = points.length;
+  const d = degree + 1; // Número de coeficientes
+  
+  // Construir matriz AᵀA (matriz normal)
+  const AtA = Array.from({ length: d }, (_, i) =>
+    Array.from({ length: d }, (_, j) =>
+      points.reduce((sum, p) => sum + Math.pow(p[0], i + j), 0)
+    )
+  );
+  
+  // Construir vector Aᵀb
+  const Atb = Array.from({ length: d }, (_, i) =>
+    points.reduce((sum, p) => sum + Math.pow(p[0], i) * p[1], 0)
+  );
+  
+  // Resolver el sistema de ecuaciones normales
+  return gaussianElimination(AtA, Atb);
+}
+
+/**
+ * Evalúa un polinomio en un punto dado
+ * p(x) = c[0] + c[1]*x + c[2]*x² + ...
+ * @param {number[]} coefficients - Coeficientes del polinomio
+ * @param {number} x - Punto de evaluación
+ * @returns {number} - Valor del polinomio en x
+ */
+function polynomialEval(coefficients, x) {
+  if (!coefficients) return 0;
+  return coefficients.reduce((sum, c, i) => sum + c * Math.pow(x, i), 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PARTE 2: DATOS Y CONFIGURACIÓN DEL JUEGO
+// ═══════════════════════════════════════════════════════════════════════════
+
+const BOARD = [
+  {id:0,  name:"SALIDA",         type:"go",    color:null,    price:0,   rent:0   },
+  {id:1,  name:"Mediterráneo",   type:"prop",  color:"#7C3AED",price:60,  rent:10  },
+  {id:2,  name:"C.Comunidad",    type:"comm",  color:null,    price:0,   rent:0   },
+  {id:3,  name:"Báltico",        type:"prop",  color:"#7C3AED",price:60,  rent:10  },
+  {id:4,  name:"Impuesto",       type:"tax",   color:null,    price:0,   rent:150 },
+  {id:5,  name:"FC Norte",       type:"rail",  color:"#6B7280",price:200, rent:50  },
+  {id:6,  name:"Oriental Av.",   type:"prop",  color:"#2563EB",price:100, rent:20  },
+  {id:7,  name:"Suerte",         type:"chance",color:null,    price:0,   rent:0   },
+  {id:8,  name:"Vermont Av.",    type:"prop",  color:"#2563EB",price:100, rent:20  },
+  {id:9,  name:"Connecticut",    type:"prop",  color:"#2563EB",price:120, rent:25  },
+  {id:10, name:"CÁRCEL",         type:"jail",  color:null,    price:0,   rent:0   },
+  {id:11, name:"St.Charles",     type:"prop",  color:"#DB2777",price:140, rent:30  },
+  {id:12, name:"Cía.Eléctr.",    type:"util",  color:"#6B7280",price:150, rent:40  },
+  {id:13, name:"States Av.",     type:"prop",  color:"#DB2777",price:140, rent:30  },
+  {id:14, name:"Virginia Av.",   type:"prop",  color:"#DB2777",price:160, rent:35  },
+  {id:15, name:"FC Sur",         type:"rail",  color:"#6B7280",price:200, rent:50  },
+  {id:16, name:"St.James",       type:"prop",  color:"#EA580C",price:180, rent:40  },
+  {id:17, name:"C.Comunidad",    type:"comm",  color:null,    price:0,   rent:0   },
+  {id:18, name:"Tennessee Av.",  type:"prop",  color:"#EA580C",price:180, rent:40  },
+  {id:19, name:"New York Av.",   type:"prop",  color:"#EA580C",price:200, rent:45  },
+  {id:20, name:"PARKING",        type:"park",  color:null,    price:0,   rent:0   },
+  {id:21, name:"Kentucky Av.",   type:"prop",  color:"#DC2626",price:220, rent:50  },
+  {id:22, name:"Suerte",         type:"chance",color:null,    price:0,   rent:0   },
+  {id:23, name:"Indiana Av.",    type:"prop",  color:"#DC2626",price:220, rent:50  },
+  {id:24, name:"Illinois Av.",   type:"prop",  color:"#DC2626",price:240, rent:55  },
+  {id:25, name:"FC Este",        type:"rail",  color:"#6B7280",price:200, rent:50  },
+  {id:26, name:"Atlantic Av.",   type:"prop",  color:"#CA8A04",price:260, rent:60  },
+  {id:27, name:"Ventnor Av.",    type:"prop",  color:"#CA8A04",price:260, rent:60  },
+  {id:28, name:"Cía.Agua",       type:"util",  color:"#6B7280",price:150, rent:40  },
+  {id:29, name:"Marvin Grdns",   type:"prop",  color:"#CA8A04",price:280, rent:65  },
+  {id:30, name:"IR A CÁRCEL",    type:"jail2", color:null,    price:0,   rent:0   },
+  {id:31, name:"Pacific Av.",    type:"prop",  color:"#16A34A",price:300, rent:70  },
+  {id:32, name:"Carolina N.",    type:"prop",  color:"#16A34A",price:300, rent:70  },
+  {id:33, name:"C.Comunidad",    type:"comm",  color:null,    price:0,   rent:0   },
+  {id:34, name:"Carolina S.",    type:"prop",  color:"#16A34A",price:320, rent:75  },
+  {id:35, name:"FC Oeste",       type:"rail",  color:"#6B7280",price:200, rent:50  },
+  {id:36, name:"Suerte",         type:"chance",color:null,    price:0,   rent:0   },
+  {id:37, name:"Park Place",     type:"prop",  color:"#1D4ED8",price:350, rent:100 },
+  {id:38, name:"Imp.de Lujo",    type:"tax",   color:null,    price:0,   rent:100 },
+  {id:39, name:"Boardwalk",      type:"prop",  color:"#1D4ED8",price:400, rent:120 },
+];
+
+const SALARY = 200000;
+const INIT_BALANCE = 15000000;
+const RENT_UNIT_SCALE = 1000;
+
+const PLAYERS_CONFIG = [
+  {color:"#DC2626", token:"🚗", name:"Jugador 1"},
+  {color:"#2563EB", token:"🎩", name:"Jugador 2"},
+  {color:"#16A34A", token:"🐋", name:"Jugador 3"},
+  {color:"#D97706", token:"🛥️", name:"Jugador 4"},
+];
+
+function getSpaceById(spaceId) {
+  return BOARD.find(space => space.id === spaceId);
+}
+
+function getColorGroupSpaces(color) {
+  return BOARD.filter(space => space.type === "prop" && space.color === color);
+}
+
+function countOwnedByType(playerId, type, properties) {
+  return BOARD.filter(space => space.type === type && properties[space.id] === playerId).length;
+}
+
+function ownsColorGroup(playerId, color, properties, mortgaged) {
+  const groupSpaces = getColorGroupSpaces(color);
+  return groupSpaces.length > 0 && groupSpaces.every(space => properties[space.id] === playerId && !mortgaged[space.id]);
+}
+
+function nearestSpacePosition(startPos, matcher) {
+  for (let step = 1; step <= 40; step++) {
+    const candidate = (startPos + step) % 40;
+    if (matcher(BOARD[candidate])) return candidate;
+  }
+  return startPos;
+}
+
+function movePlayerTo(player, targetPos, collectSalary = true) {
+  const updated = {...player};
+  if (collectSalary && !updated.inJail && targetPos < updated.pos) {
+    updated.balance += SALARY;
+  }
+  updated.pos = targetPos;
+  return updated;
+}
+
+function estimateAuctionBid(player, space, properties) {
+  const cash = player.balance;
+
+  if (space.type === "prop") {
+    const groupSpaces = getColorGroupSpaces(space.color);
+    const ownedCount = groupSpaces.filter(groupSpace => properties[groupSpace.id] === player.id).length;
+    const monopolyChance = ownedCount === groupSpaces.length - 1 ? 1.45 : ownedCount > 0 ? 1.2 : 0.95;
+    return Math.min(cash, Math.round(space.price * monopolyChance));
+  }
+
+  if (space.type === "rail") {
+    const ownedCount = countOwnedByType(player.id, "rail", properties);
+    return Math.min(cash, Math.round(space.price * (0.85 + ownedCount * 0.25)));
+  }
+
+  if (space.type === "util") {
+    const ownedCount = countOwnedByType(player.id, "util", properties);
+    return Math.min(cash, Math.round(space.price * (0.8 + ownedCount * 0.15)));
+  }
+
+  return Math.min(cash, Math.round(space.price * 0.5));
+}
+
+function runAuction(space, players, properties) {
+  const reserve = Math.max(1, Math.round(space.price * 0.5));
+  const bids = players
+    .filter(player => !player.bankrupt && player.balance >= reserve)
+    .map(player => ({player, bid: estimateAuctionBid(player, space, properties)}))
+    .filter(entry => entry.bid >= reserve && entry.bid <= entry.player.balance)
+    .sort((a, b) => b.bid - a.bid || a.player.id - b.player.id);
+
+  if (!bids.length) {
+    return {
+      players,
+      properties,
+      logMessage: "🏷️ Subasta: nadie hizo una oferta por " + space.name + "."
+    };
+  }
+
+  const winner = bids[0];
+  const updatedPlayers = players.map(player =>
+    player.id === winner.player.id ? {...player, balance: player.balance - winner.bid} : player
+  );
+  const updatedProperties = {...properties, [space.id]: winner.player.id};
+
+  return {
+    players: updatedPlayers,
+    properties: updatedProperties,
+    logMessage: "🏷️ Subasta: " + winner.player.token + " ganó " + space.name + " por " + formatMoney(winner.bid)
+  };
+}
+
+function resolveLandingAfterMove(player, players, log, context) {
+  const space = BOARD[player.pos];
+  const currentPlayers = [...players];
+  const addLog = msg => { log = [msg, ...log].slice(0, 40); };
+
+  addLog(context + " → " + space.name);
+
+  if (space.type === "go") {
+    addLog(player.token + " cae en SALIDA → cobra " + formatMoney(SALARY) + "!");
+    player.balance += SALARY;
+    currentPlayers[GAME.currentPlayerIdx] = player;
+    return {players: currentPlayers, log, gamePhase: GAME.turnDoublesCount > 0 ? "roll" : "end", pending: null};
+  }
+
+  if (space.type === "jail2") {
+    player.pos = 10;
+    player.inJail = true;
+    player.jailTurns = 0;
+    addLog(player.token + " va directo a la CÁRCEL por efecto de la carta.");
+    currentPlayers[GAME.currentPlayerIdx] = player;
+    return {players: currentPlayers, log, gamePhase: "end", pending: null, turnDoublesCount: 0};
+  }
+
+  if (space.type === "tax") {
+    player.balance -= space.rent;
+    addLog(player.token + " paga impuesto " + formatMoney(space.rent));
+    currentPlayers[GAME.currentPlayerIdx] = player;
+    return {players: currentPlayers, log, gamePhase: GAME.turnDoublesCount > 0 ? "roll" : "end", pending: null};
+  }
+
+  if (space.type === "prop" || space.type === "rail" || space.type === "util") {
+    const ownerId = GAME.properties[space.id];
+    if (ownerId === undefined) {
+      addLog("📍 La carta dejó a " + player.token + " en " + space.name + " para compra o subasta.");
+      currentPlayers[GAME.currentPlayerIdx] = player;
+      return {players: currentPlayers, log, gamePhase: "buy_prompt", pending: space};
+    }
+
+    if (ownerId === player.id) {
+      addLog(player.token + " cayó en su propia propiedad.");
+      currentPlayers[GAME.currentPlayerIdx] = player;
+      return {players: currentPlayers, log, gamePhase: GAME.turnDoublesCount > 0 ? "roll" : "end", pending: null};
+    }
+
+    if (GAME.mortgaged[space.id]) {
+      addLog("⛔ " + space.name + " está hipotecada. No se cobra renta.");
+      currentPlayers[GAME.currentPlayerIdx] = player;
+      return {players: currentPlayers, log, gamePhase: GAME.turnDoublesCount > 0 ? "roll" : "end", pending: null};
+    }
+
+    let rentAmount = 0;
+    if (space.type === "prop") {
+      const monopolyBonus = ownsColorGroup(ownerId, space.color, GAME.properties, GAME.mortgaged) ? 2 : 1;
+      rentAmount = Math.round(space.rent * RENT_UNIT_SCALE * GAME.inflationMultiplier * monopolyBonus);
+    } else if (space.type === "rail") {
+      const railCount = countOwnedByType(ownerId, "rail", GAME.properties);
+      rentAmount = Math.round(space.rent * Math.pow(2, railCount - 1) * RENT_UNIT_SCALE * GAME.inflationMultiplier);
+    } else if (space.type === "util") {
+      const utilCount = countOwnedByType(ownerId, "util", GAME.properties);
+      rentAmount = Math.round((GAME.diceRoll ? GAME.diceRoll[0] + GAME.diceRoll[1] : 0) * (utilCount === 1 ? 4 : 10) * RENT_UNIT_SCALE * GAME.inflationMultiplier);
+    }
+
+    player.balance -= rentAmount;
+    const owner = {...currentPlayers.find(x => x.id === ownerId)};
+    owner.balance += rentAmount;
+    addLog(player.token + " paga renta " + formatMoney(rentAmount) + " a " + owner.token + " (inflación ×" + GAME.inflationMultiplier.toFixed(2) + ")");
+    const updatedPlayers = currentPlayers.map(pl => pl.id === player.id ? player : pl.id === ownerId ? owner : pl);
+    return {players: updatedPlayers, log, gamePhase: GAME.turnDoublesCount > 0 ? "roll" : "end", pending: null};
+  }
+
+  currentPlayers[GAME.currentPlayerIdx] = player;
+  return {players: currentPlayers, log, gamePhase: GAME.turnDoublesCount > 0 ? "roll" : "end", pending: null};
+}
+
+const CHANCE_CARDS = [
+  {text:"¡Avanza a SALIDA! Cobra tu sueldo.",       action:p=>({...p,pos:0,balance:p.balance+SALARY})},
+  {text:"Ve directo a la CÁRCEL.",                  action:p=>({...p,pos:10,inJail:true,jailTurns:0})},
+  {text:"Avanza al ferrocarril más cercano.",       action:p=>movePlayerTo(p, nearestSpacePosition(p.pos, space => space.type === "rail"))},
+  {text:"Avanza a la utilidad más cercana.",        action:p=>movePlayerTo(p, nearestSpacePosition(p.pos, space => space.type === "util"))},
+  {text:"Dividendos del banco: recibe $300K.",      action:p=>({...p,balance:p.balance+300000})},
+  {text:"Paga $500K de multa de tránsito.",         action:p=>({...p,balance:p.balance-500000})},
+  {text:"Retrocede 3 casillas.",                    action:p=>({...p,pos:(p.pos-3+40)%40})},
+  {text:"Premio de lotería: +$800K.",               action:p=>({...p,balance:p.balance+800000})},
+  {text:"Sale libre de la cárcel.",                 action:p=>({...p,jailFreeCards:(p.jailFreeCards || 0)+1})},
+  {text:"Ve a Illinois Av.",                        action:p=>movePlayerTo(p, 24)},
+  {text:"Paga reparaciones: -$600K.",               action:p=>({...p,balance:p.balance-600000})},
+  {text:"Ve a St. Charles Place.",                  action:p=>movePlayerTo(p, 11)},
+  {text:"Paga costo de infraestructura: -$400K.",   action:p=>({...p,balance:p.balance-400000})},
+  {text:"Recibe bonificación: +$250K.",             action:p=>({...p,balance:p.balance+250000})},
+  {text:"Paga seguro de negocios: -$300K.",         action:p=>({...p,balance:p.balance-300000})},
+  {text:"Ve a la casilla más cercana de SALIDA.",   action:p=>movePlayerTo(p, 0)},
+];
+
+const COMM_CARDS = [
+  {text:"Herencia de un familiar: +$250K.",         action:p=>({...p,balance:p.balance+250000})},
+  {text:"Error bancario a tu favor: +$150K.",       action:p=>({...p,balance:p.balance+150000})},
+  {text:"Gastos médicos: paga $300K.",              action:p=>({...p,balance:p.balance-300000})},
+  {text:"Premio de concurso: +$100K.",              action:p=>({...p,balance:p.balance+100000})},
+  {text:"Reparaciones del edificio: -$500K.",       action:p=>({...p,balance:p.balance-500000})},
+  {text:"Ventas del trimestre: +$600K.",            action:p=>({...p,balance:p.balance+600000})},
+  {text:"Regalo de cumpleaños: +$150K.",            action:p=>({...p,balance:p.balance+150000})},
+  {text:"Paga el seguro médico: -$250K.",           action:p=>({...p,balance:p.balance-250000})},
+  {text:"Sale libre de la cárcel.",                 action:p=>({...p,jailFreeCards:(p.jailFreeCards || 0)+1})},
+  {text:"Recibe devolución de impuestos: +$200K.",   action:p=>({...p,balance:p.balance+200000})},
+  {text:"Costos de consultoría: -$350K.",           action:p=>({...p,balance:p.balance-350000})},
+  {text:"Paga cuota escolar: -$200K.",              action:p=>({...p,balance:p.balance-200000})},
+  {text:"Ingresos por intereses: +$100K.",          action:p=>({...p,balance:p.balance+100000})},
+  {text:"Paga mantenimiento de propiedades: -$300K.", action:p=>({...p,balance:p.balance-300000})},
+  {text:"Bonificación por desempeño: +$200K.",      action:p=>({...p,balance:p.balance+200000})},
+  {text:"Crash de mercado: -$400K.",                action:p=>({...p,balance:p.balance-400000})},
+];
+
+function useJailFreeCard(player) {
+  if (!player.jailFreeCards || player.jailFreeCards <= 0 || !player.inJail) return player;
+  return {
+    ...player,
+    jailFreeCards: player.jailFreeCards - 1,
+    inJail: false,
+    jailTurns: 0
+  };
+}
+
+function moveToNearestRailroad(player) {
+  return movePlayerTo(player, nearestSpacePosition(player.pos, space => space.type === "rail"));
+}
+
+function moveToNearestUtility(player) {
+  return movePlayerTo(player, nearestSpacePosition(player.pos, space => space.type === "util"));
+}
+
+function formatMoney(n) {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1000000) return sign + "$" + (abs/1000000).toFixed(1) + "M";
+  if (abs >= 1000) return sign + "$" + Math.round(abs/1000) + "K";
+  return sign + "$" + abs;
+}
+
+function rollDice() {
+  return Math.floor(Math.random() * 6) + 1;
+}
+
+function initGame(numPlayers) {
+  return {
+    players: PLAYERS_CONFIG.slice(0, numPlayers).map((cfg, i) => ({
+      id: i,
+      name: cfg.name,
+      color: cfg.color,
+      token: cfg.token,
+      balance: INIT_BALANCE,
+      pos: 0,
+      inJail: false,
+      jailTurns: 0,
+      bankrupt: false
+    })),
+    properties: {},
+    currentPlayerIdx: 0,
+    gamePhase: "roll", // roll | buy_prompt | end
+    diceRoll: null,
+    log: ["🎮 ¡Juego iniciado! Saldo inicial: " + formatMoney(INIT_BALANCE) + " por jugador."],
+    round: 1,
+    ecoData: [[1, INIT_BALANCE]], // [ronda, riqueza_promedio]
+    playerRoundBalances: PLAYERS_CONFIG.slice(0, numPlayers).reduce((acc, _, i) => {
+      acc[i] = INIT_BALANCE;
+      return acc;
+    }, {}),
+    polyCoeffs: null,
+    inflationMultiplier: 1.0,
+    turnDoublesCount: 0,
+    mortgaged: {},
+    pending: null,
+    winner: null
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PARTE 3: LÓGICA DEL MÉTODO NUMÉRICO
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Actualiza el modelo económico del juego
+ * Captura la riqueza promedio de jugadores activos cada ronda
+ * Ajusta una curva polinomial y calcula el multiplicador de inflación
+ * 
+ * ENTRADA: Array de jugadores, número de ronda, datos históricos
+ * SALIDA: nuevos datos, coeficientes del polinomio, multiplicador
+ */
+function updateEconomicModel(players, round, ecoData) {
+  const activePlayers = players.filter(p => !p.bankrupt);
+  if (activePlayers.length === 0) {
+    return { newEcoData: ecoData, coeffs: null, multiplier: 1.0 };
+  }
+  
+  // Calcular riqueza promedio
+  const avgWealth = activePlayers.reduce((sum, p) => sum + p.balance, 0) / activePlayers.length;
+  const newEcoData = [...ecoData, [round, avgWealth]];
+  
+  // Necesitamos al menos 3 puntos para ajustar un polinomio de grado 2
+  if (newEcoData.length < 3) {
+    return { newEcoData, coeffs: null, multiplier: 1.0 };
+  }
+  
+  // Ajustar polinomio de grado 2
+  const coeffs = polynomialFit(newEcoData, 2);
+  if (!coeffs) {
+    return { newEcoData, coeffs: null, multiplier: 1.0 };
+  }
+  
+  // Calcular multiplicador de inflación
+  // inflator = p(round) / p(1), con límites [1.0, 2.5]
+  const baseValue = polynomialEval(coeffs, 1);
+  const currentValue = polynomialEval(coeffs, round);
+  const ratio = baseValue > 0 ? currentValue / baseValue : 1;
+  const multiplier = Math.max(1.0, Math.min(2.5, ratio));
+  
+  return { newEcoData, coeffs, multiplier };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PARTE 4: MOTOR DEL JUEGO
+// ═══════════════════════════════════════════════════════════════════════════
+
+let GAME = null;
+let SCREEN = "setup"; // setup | game | over
+let NUM_PLAYERS = 2;
+
+function processRoll() {
+  if (GAME.gamePhase !== "roll") return;
+  
+  const d1 = rollDice();
+  const d2 = rollDice();
+  const steps = d1 + d2;
+  
+  let player = {...GAME.players[GAME.currentPlayerIdx]};
+  let players = [...GAME.players];
+  let log = [...GAME.log];
+  let doublesCount = GAME.turnDoublesCount || 0;
+  
+  const addLog = msg => { log = [msg, ...log].slice(0, 40); };
+  const isDouble = d1 === d2;
+  let releasedFromJail = false;
+  let nextPhase = "end";
+  
+  // Manejo de cárcel
+  if (player.inJail) {
+    if (isDouble) {
+      addLog(player.token + " sacó dobles — ¡sale de la cárcel!");
+      player.inJail = false;
+      player.jailTurns = 0;
+      releasedFromJail = true;
+    } else {
+      player.jailTurns++;
+      if (player.jailTurns >= 3) {
+        player.balance -= 500000;
+        player.inJail = false;
+        player.jailTurns = 0;
+        addLog(player.token + " pagó $500K para salir de la cárcel.");
+      } else {
+        addLog(player.token + " sigue en cárcel (" + player.jailTurns + "/3). Dados: " + d1 + "+" + d2);
+        players[GAME.currentPlayerIdx] = player;
+        GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: "end", turnDoublesCount: 0, log};
+        render();
+        return;
+      }
+    }
+  }
+  
+  // Movimiento
+  const oldPos = player.pos;
+  player.pos = (oldPos + steps) % 40;
+  const passedGo = !player.inJail && player.pos < oldPos;
+  
+  if (passedGo) {
+    player.balance += SALARY;
+    addLog(player.token + " pasó por SALIDA → cobra " + formatMoney(SALARY) + "!");
+  }
+
+  if (isDouble && !releasedFromJail) {
+    doublesCount += 1;
+    if (doublesCount >= 3) {
+      player.pos = 10;
+      player.inJail = true;
+      player.jailTurns = 0;
+      doublesCount = 0;
+      players[GAME.currentPlayerIdx] = player;
+      addLog("🚨 " + player.token + " sacó tres dobles seguidos y va directo a la CÁRCEL.");
+      GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: "end", turnDoublesCount: 0, log};
+      render();
+      return;
+    }
+    nextPhase = "roll";
+    addLog(player.token + " sacó dobles y obtiene otro turno.");
+  } else {
+    doublesCount = 0;
+  }
+  
+  const space = BOARD[player.pos];
+  addLog(player.token + " " + player.name + ": " + d1 + "+" + d2 + "=" + steps + " → " + space.name);
+  players[GAME.currentPlayerIdx] = player;
+  
+  // Procesar casilla según tipo
+  switch(space.type) {
+    case "go":
+      if (!passedGo) {
+        player.balance += SALARY;
+        addLog(player.token + " en SALIDA → cobra " + formatMoney(SALARY) + "!");
+      }
+      players[GAME.currentPlayerIdx] = player;
+      GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: nextPhase, turnDoublesCount: doublesCount, log};
+      break;
+    
+    case "prop":
+    case "rail":
+    case "util": {
+      const ownerId = GAME.properties[space.id];
+      if (ownerId === undefined) {
+        players[GAME.currentPlayerIdx] = player;
+        GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: "buy_prompt", pending: space, log};
+      } else if (ownerId === player.id) {
+        addLog(player.token + " está en su propia propiedad.");
+        GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: nextPhase, turnDoublesCount: doublesCount, log};
+      } else {
+        if (GAME.mortgaged[space.id]) {
+          addLog("⛔ " + space.name + " está hipotecada. No se cobra renta.");
+          GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: nextPhase, turnDoublesCount: doublesCount, log};
+          break;
+        }
+
+        let rentAmount = 0;
+        if (space.type === "prop") {
+          const monopolyBonus = ownsColorGroup(ownerId, space.color, GAME.properties, GAME.mortgaged) ? 2 : 1;
+          rentAmount = Math.round(space.rent * RENT_UNIT_SCALE * GAME.inflationMultiplier * monopolyBonus);
+        } else if (space.type === "rail") {
+          const railCount = countOwnedByType(ownerId, "rail", GAME.properties);
+          rentAmount = Math.round(space.rent * Math.pow(2, railCount - 1) * RENT_UNIT_SCALE * GAME.inflationMultiplier);
+        } else if (space.type === "util") {
+          const utilCount = countOwnedByType(ownerId, "util", GAME.properties);
+          rentAmount = Math.round(steps * (utilCount === 1 ? 4 : 10) * RENT_UNIT_SCALE * GAME.inflationMultiplier);
+        }
+        player.balance -= rentAmount;
+        
+        let owner = {...players.find(x => x.id === ownerId)};
+        owner.balance += rentAmount;
+        
+        addLog(player.token + " paga renta " + formatMoney(rentAmount) + " a " + owner.token + 
+               " (inflación ×" + GAME.inflationMultiplier.toFixed(2) + ")");
+        
+        players = players.map(pl =>
+          pl.id === player.id ? player : pl.id === ownerId ? owner : pl
+        );
+        
+        // Verificar quiebra
+        if (player.balance < 0) {
+          players = players.map(pl => pl.id === player.id ? {...pl, bankrupt: true} : pl);
+          addLog("💥 " + player.token + " " + player.name + " ¡BANCARROTA!");
+          const activePlayers = players.filter(x => !x.bankrupt);
+          if (activePlayers.length === 1) {
+            GAME = {...GAME, players, diceRoll: [d1, d2], winner: activePlayers[0], log};
+            render();
+            return;
+          }
+        }
+        GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: nextPhase, turnDoublesCount: doublesCount, log};
+      }
+      break;
+    }
+    
+    case "tax": {
+      player.balance -= space.rent;
+      players[GAME.currentPlayerIdx] = player;
+      addLog(player.token + " paga impuesto " + formatMoney(space.rent));
+      
+      if (player.balance < 0) {
+        players = players.map(pl => pl.id === player.id ? {...pl, bankrupt: true} : pl);
+        addLog("💥 " + player.token + " ¡BANCARROTA!");
+        const activePlayers = players.filter(x => !x.bankrupt);
+        if (activePlayers.length === 1) {
+          GAME = {...GAME, players, diceRoll: [d1, d2], winner: activePlayers[0], log};
+          render();
+          return;
+        }
+      }
+      GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: nextPhase, turnDoublesCount: doublesCount, log};
+      break;
+    }
+    
+    case "chance": {
+      const card = CHANCE_CARDS[Math.floor(Math.random() * CHANCE_CARDS.length)];
+      SHOW_CARD_MODAL = true;
+      CURRENT_CARD = {type: "🎴 Suerte", text: card.text, action: card.action};
+      GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: "card_modal", log};
+      render();
+      return;
+    }
+    
+    case "comm": {
+      const card = COMM_CARDS[Math.floor(Math.random() * COMM_CARDS.length)];
+      SHOW_CARD_MODAL = true;
+      CURRENT_CARD = {type: "📦 C.Comunidad", text: card.text, action: card.action};
+      GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: "card_modal", log};
+      render();
+      return;
+    }
+    
+    case "jail2":
+      player.pos = 10;
+      player.inJail = true;
+      player.jailTurns = 0;
+      doublesCount = 0;
+      players[GAME.currentPlayerIdx] = player;
+      addLog(player.token + " ¡Va directo a la CÁRCEL!");
+      GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: "end", turnDoublesCount: 0, log};
+      break;
+    
+    default:
+      GAME = {...GAME, players, diceRoll: [d1, d2], gamePhase: nextPhase, turnDoublesCount: doublesCount, log};
+  }
+  
+  render();
+}
+
+function processBuy(shouldBuy) {
+  const space = GAME.pending;
+  let player = {...GAME.players[GAME.currentPlayerIdx]};
+  let players = [...GAME.players];
+  let properties = {...GAME.properties};
+  let log = [...GAME.log];
+  const nextPhase = GAME.turnDoublesCount > 0 ? "roll" : "end";
+  
+  if (shouldBuy && player.balance >= space.price) {
+    player.balance -= space.price;
+    properties[space.id] = player.id;
+    players = GAME.players.map((p, i) => i === GAME.currentPlayerIdx ? player : p);
+    log = ["🏠 " + player.token + " compró " + space.name + " por " + formatMoney(space.price), ...log].slice(0, 40);
+  } else {
+    log = ["⏭️ " + player.token + " no compró " + space.name, ...log].slice(0, 40);
+    const auction = runAuction(space, players, properties);
+    players = auction.players;
+    properties = auction.properties;
+    log = [auction.logMessage, ...log].slice(0, 40);
+  }
+  
+  GAME = {...GAME, players, properties, gamePhase: nextPhase, pending: null, log};
+  render();
+}
+
+function processEndTurn() {
+  const activePlayers = GAME.players.filter(p => !p.bankrupt);
+  if (activePlayers.length <= 1) return;
+  
+  let nextIdx = (GAME.currentPlayerIdx + 1) % GAME.players.length;
+  while (GAME.players[nextIdx].bankrupt) {
+    nextIdx = (nextIdx + 1) % GAME.players.length;
+  }
+  
+  const isNewRound = nextIdx <= GAME.currentPlayerIdx;
+  const newRound = isNewRound ? GAME.round + 1 : GAME.round;
+  
+  let ecoData = GAME.ecoData;
+  let playerRoundBalances = GAME.playerRoundBalances;
+  let coeffs = GAME.polyCoeffs;
+  let multiplier = GAME.inflationMultiplier;
+  let log = GAME.log;
+  
+  // Actualizar modelo económico al inicio de nueva ronda
+  if (isNewRound) {
+    const {newEcoData, coeffs: newCoeffs, multiplier: newMult} = 
+      updateEconomicModel(GAME.players, newRound, GAME.ecoData);
+    
+    ecoData = newEcoData;
+    coeffs = newCoeffs;
+    multiplier = newMult;
+    
+    log = [
+      "📊 Ronda " + newRound + " — Inflación ×" + multiplier.toFixed(2) + 
+      " | p(x) ajustado con " + ecoData.length + " puntos",
+      ...log
+    ].slice(0, 40);
+
+    // Snapshot de saldo para comparar cambios durante la nueva ronda
+    playerRoundBalances = GAME.players.reduce((acc, p) => {
+      acc[p.id] = p.balance;
+      return acc;
+    }, {});
+  }
+  
+  GAME = {
+    ...GAME,
+    currentPlayerIdx: nextIdx,
+    gamePhase: "roll",
+    diceRoll: null,
+    turnDoublesCount: 0,
+    round: newRound,
+    ecoData,
+    playerRoundBalances,
+    polyCoeffs: coeffs,
+    inflationMultiplier: multiplier,
+    log
+  };
+  
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PARTE 5: RENDERIZADO
+// ═══════════════════════════════════════════════════════════════════════════
+
+let SHOW_NUMERIC_METHOD = false;
+let SHOW_CARD_MODAL = false;
+let CURRENT_CARD = null;
+
+function render() {
+  const root = document.getElementById("root");
+  
+  if (SCREEN === "setup") {
+    root.innerHTML = renderSetup();
+    bindSetup();
+  } else if (GAME && GAME.winner) {
+    root.innerHTML = renderGameOver();
+    bindGameOver();
+  } else {
+    root.innerHTML = renderGame();
+    bindGame();
+  }
+}
+
+function bindGame() {}
+
+function renderSetup() {
+  return `
+  <div class="setup-container">
+    <h1>🏦 Monopoly Banco Electrónico</h1>
+    <p class="subtitle">Con ajuste polinomial de mínimos cuadrados</p>
+    
+    <div class="card" style="margin: 24px 0 16px; padding: 20px;">
+      <h2>Número de Jugadores</h2>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        ${[2, 3, 4].map(n => `
+          <button onclick="selectPlayers(${n})" class="btn ${NUM_PLAYERS === n ? 'btn-primary' : ''}"
+            style="width: 80px; height: 80px; font-size: 32px;">
+            ${n}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+    
+    <div class="panel" style="margin-bottom: 16px;">
+      <h2>Jugadores</h2>
+      ${PLAYERS_CONFIG.slice(0, NUM_PLAYERS).map((p, i) => `
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+          <span style="width: 12px; height: 12px; border-radius: 50%; background: ${p.color};"></span>
+          <span>${p.token} ${p.name}</span>
+          <span class="sec" style="margin-left: auto;">${formatMoney(INIT_BALANCE)}</span>
+        </div>
+      `).join('')}
+    </div>
+    
+    <div class="card num-method" style="margin-bottom: 20px;">
+      <h2 style="margin-top: 0;">Método Numérico</h2>
+      <p><strong>Ajuste Polinomial Grado 2 (Mínimos Cuadrados)</strong></p>
+      <p class="sec">
+        Cada ronda registra la riqueza promedio de jugadores activos.
+        Con ≥3 puntos se ajusta p(x) = a₀ + a₁·x + a₂·x² resolviendo
+        el sistema normal AᵀA·c = Aᵀb mediante Eliminación Gaussiana
+        con pivoteo parcial. El resultado (ratio p(ronda)/p(1)) ajusta
+        dinámicamente las rentas, simulando inflación económica real.
+      </p>
+    </div>
+    
+    <button onclick="startGame()" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 16px;">
+      ¡Iniciar Juego!
+    </button>
+  </div>
+  `;
+}
+
+function renderGameOver() {
+  const winner = GAME.winner;
+  return `
+  <div style="text-align: center; padding: 3rem 1rem;">
+    <div style="font-size: 80px; margin-bottom: 20px;">${winner.token}</div>
+    <h1 style="margin-bottom: 8px;">¡${winner.name} ganó!</h1>
+    <p style="margin-bottom: 4px;">Saldo final: ${formatMoney(winner.balance)}</p>
+    <p class="sec" style="margin-bottom: 24px;">Rondas jugadas: ${GAME.round}</p>
+    <button onclick="goSetup()" class="btn btn-primary" style="padding: 10px 24px;">
+      Nuevo Juego
+    </button>
+  </div>
+  `;
+}
+
+function renderGame() {
+  const cur = GAME.players[GAME.currentPlayerIdx];
+  const infColor = GAME.inflationMultiplier > 1.5 ? "danger" : 
+                   GAME.inflationMultiplier > 1.2 ? "warning" : "success";
+  const ownedByCurrent = BOARD.filter(space => GAME.properties[space.id] === cur.id);
+  const activePlayers = GAME.players.filter(p => !p.bankrupt);
+  const avgWealthNow = activePlayers.length
+    ? activePlayers.reduce((sum, p) => sum + p.balance, 0) / activePlayers.length
+    : 0;
+  const prevAvgWealth = GAME.ecoData.length ? GAME.ecoData[GAME.ecoData.length - 1][1] : avgWealthNow;
+  const avgDeltaPct = prevAvgWealth > 0 ? ((avgWealthNow / prevAvgWealth) - 1) * 100 : 0;
+  const sampleBaseRent = 100000;
+  const sampleAdjustedRent = Math.round(sampleBaseRent * GAME.inflationMultiplier);
+  const sampleImpactPct = (GAME.inflationMultiplier - 1) * 100;
+  const roundBalances = GAME.playerRoundBalances || {};
+  const getBalanceDelta = (p) => p.balance - (roundBalances[p.id] ?? p.balance);
+  const getBalanceColor = (p) => {
+    const delta = getBalanceDelta(p);
+    if (delta < 0) return "#ef4444";
+    if (delta > 0) return "#10b981";
+    return "#e2e8f0";
+  };
+  
+  // Renderizar tablero en filas de 10
+  let boardHTML = '<div class="board-grid">';
+  for (let i = 0; i < 40; i++) {
+    const space = BOARD[i];
+    const owner = GAME.properties[space.id] !== undefined ? 
+      GAME.players.find(p => p.id === GAME.properties[space.id]) : null;
+    const playersHere = GAME.players.filter(p => !p.bankrupt && p.pos === space.id);
+    const mortgaged = GAME.mortgaged[space.id];
+    
+    // Detectar monopolio
+    const hasMonopoly = owner && space.type === "prop" && ownsColorGroup(owner.id, space.color, GAME.properties, GAME.mortgaged);
+    
+    // Detectar cantidad de ferrocarriles
+    const railCount = owner && space.type === "rail" ? countOwnedByType(owner.id, "rail", GAME.properties) : 0;
+    
+    // Detectar cantidad de utilidades
+    const utilCount = owner && space.type === "util" ? countOwnedByType(owner.id, "util", GAME.properties) : 0;
+    
+    let visibleRent = null;
+    if (space.rent > 0 && !mortgaged) {
+      if (space.type === "prop") {
+        const monopolyBonus = hasMonopoly ? 2 : 1;
+        visibleRent = Math.round(space.rent * RENT_UNIT_SCALE * GAME.inflationMultiplier * monopolyBonus);
+      } else if (space.type === "rail") {
+        visibleRent = Math.round(space.rent * Math.pow(2, Math.max(0, railCount - 1)) * RENT_UNIT_SCALE * GAME.inflationMultiplier);
+      } else if (space.type === "util") {
+        const diceSum = GAME.diceRoll ? GAME.diceRoll[0] + GAME.diceRoll[1] : 0;
+        visibleRent = diceSum > 0 ? Math.round(diceSum * (utilCount === 1 ? 4 : 10) * RENT_UNIT_SCALE * GAME.inflationMultiplier) : null;
+      } else {
+        visibleRent = Math.round(space.rent * RENT_UNIT_SCALE * GAME.inflationMultiplier);
+      }
+    }
+    
+    // Badges
+    let badges = '';
+    if (mortgaged) badges += '🔒 ';
+    if (hasMonopoly) badges += '⭐ ';
+    if (space.type === "rail" && railCount > 0) badges += `🏢×${railCount} `;
+    if (space.type === "util" && utilCount > 0) badges += `⚡×${utilCount} `;
+    
+    boardHTML += `
+    <div class="space ${owner ? 'owned' : ''}" style="${owner ? 'border-top-color: ' + owner.color : ''}">
+      <div class="space-name">${space.name}${badges ? '<br style="font-size:8px"/><span style="font-size:11px;">' + badges.trim() + '</span>' : ''}</div>
+      ${space.price > 0 ? `<div class="space-price">${formatMoney(space.price)}</div>` : ''}
+      ${visibleRent !== null && GAME.inflationMultiplier > 1.01 ? `<div class="space-rent">R: ${formatMoney(visibleRent)}</div>` : ''}
+      ${mortgaged ? `<div class="space-rent">Hipotecada</div>` : ''}
+      ${owner ? `<div class="space-owner" style="background: ${owner.color};"></div>` : ''}
+      <div class="space-tokens">
+        ${playersHere.map(p => `<span style="font-size: 14px;">${p.token}</span>`).join('')}
+      </div>
+    </div>
+    `;
+  }
+  boardHTML += '</div>';
+  
+  // Gráfico del método numérico
+  let chartHTML = '';
+  if (GAME.ecoData.length >= 2) {
+    const W = 320, H = 100;
+    const maxRound = Math.max(GAME.round + 3, 8);
+    
+    const allY = [...GAME.ecoData.map(d => d[1])];
+    if (GAME.polyCoeffs) {
+      for (let r = 1; r <= maxRound; r++) {
+        allY.push(Math.max(0, polynomialEval(GAME.polyCoeffs, r)));
+      }
+    }
+    
+    const maxY = Math.max(...allY) * 1.05 || INIT_BALANCE;
+    const minY = Math.min(...allY.filter(y => y > 0)) * 0.95 || 0;
+    
+    const toX = r => ((r - 1) / (maxRound - 1)) * (W - 30) + 15;
+    const toY = v => H - 10 - ((v - minY) / (maxY - minY || 1)) * (H - 20);
+    
+    let curvePts = '';
+    if (GAME.polyCoeffs) {
+      for (let r = 1; r <= maxRound; r += 0.3) {
+        const y = polynomialEval(GAME.polyCoeffs, r);
+        curvePts += toX(r) + ',' + toY(y) + ' ';
+      }
+    }
+    
+    chartHTML = `
+    <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      <line x1="15" x2="${W-15}" y1="${H-10}" y2="${H-10}" stroke="#475569" stroke-width="1"/>
+      ${[0.33, 0.66, 1].map(t => `
+        <line x1="15" x2="${W-15}" y1="${toY(minY + t * (maxY - minY))}" 
+              y2="${toY(minY + t * (maxY - minY))}" stroke="#334155" stroke-width="0.5"/>
+      `).join('')}
+      ${curvePts ? `<polyline points="${curvePts}" fill="none" stroke="#3b82f6" stroke-width="2" opacity="0.8"/>` : ''}
+      ${GAME.polyCoeffs ? `<line x1="${toX(GAME.round)}" x2="${toX(GAME.round)}" y1="4" y2="${H-10}" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,2"/>` : ''}
+      ${GAME.ecoData.map(([r, v]) => `<circle cx="${toX(r)}" cy="${toY(v)}" r="3" fill="#ef4444" opacity="0.9"/>`).join('')}
+      <text x="18" y="${H-2}" font-size="8" fill="#60a5fa">p(x)</text>
+      <text x="55" y="${H-2}" font-size="8" fill="#ef4444">datos</text>
+    </svg>
+    `;
+  }
+  
+  const numPanel = SHOW_NUMERIC_METHOD ? `
+  <div class="card num-method" style="margin-bottom: 12px;">
+    <div class="num-method-header">
+      <h2 style="margin: 0;">Ajuste Polinomial</h2>
+      <span class="tag ${GAME.polyCoeffs ? 'tag-success' : 'tag-warning'}">
+        ${GAME.polyCoeffs ? 'Activo' : 'Esperando datos'}
+      </span>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
+      <div class="panel">
+        <div class="sec" style="font-size: 10px; margin-bottom: 4px;">Puntos capturados</div>
+        <div style="font-size: 18px; font-weight: 600;">${GAME.ecoData.length}</div>
+      </div>
+      <div class="panel">
+        <div class="sec" style="font-size: 10px; margin-bottom: 4px;">Multiplicador</div>
+        <div style="font-size: 18px; font-weight: 600;">×${GAME.inflationMultiplier.toFixed(3)}</div>
+      </div>
+      <div class="panel">
+        <div class="sec" style="font-size: 10px; margin-bottom: 4px;">Ronda actual</div>
+        <div style="font-size: 18px; font-weight: 600;">${GAME.round}</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom: 10px; border-left: 3px solid #0ea5e9;">
+      <p style="font-size: 11px; line-height: 1.6;">
+        <strong>Riqueza promedio actual:</strong> ${formatMoney(Math.round(avgWealthNow))}
+        <span style="color: ${avgDeltaPct < 0 ? '#ef4444' : avgDeltaPct > 0 ? '#10b981' : '#94a3b8'};">
+          (${avgDeltaPct >= 0 ? '+' : ''}${avgDeltaPct.toFixed(1)}% vs última captura)
+        </span><br>
+        <strong>Leyenda de renta:</strong> base ${formatMoney(sampleBaseRent)} → ajustada ${formatMoney(sampleAdjustedRent)} 
+        <span style="color: #f59e0b;">(${sampleImpactPct >= 0 ? '+' : ''}${sampleImpactPct.toFixed(1)}%)</span>
+      </p>
+    </div>
+    
+    ${GAME.polyCoeffs ? `
+    <div class="coefficient-display">
+      p(x) = ${GAME.polyCoeffs[0].toFixed(0)} + ${GAME.polyCoeffs[1].toFixed(0)}·x + ${GAME.polyCoeffs[2].toFixed(0)}·x²
+    </div>
+    ` : ''}
+    
+    ${GAME.ecoData.length >= 2 ? chartHTML : `
+    <p class="sec" style="text-align: center; padding: 12px 0;">
+      Necesita ${3 - GAME.ecoData.length} ronda(s) más para ajustar la curva.
+    </p>
+    `}
+    
+    <div class="panel" style="margin-top: 10px; border-left: 3px solid #3b82f6;">
+      <p style="font-size: 11px; line-height: 1.6;">
+        <strong>Alimentación:</strong> Al completar cada ronda se captura 
+        (ronda, riqueza_promedio_activos).<br>
+        <strong>Resolución:</strong> Con ≥3 puntos se resuelve AᵀA·c = Aᵀb 
+        mediante Eliminación Gaussiana con pivoteo.<br>
+        <strong>Resultado:</strong> inflator = p(ronda)/p(1), acotado [1.0, 2.5]. 
+        Multiplica rentas.
+      </p>
+    </div>
+  </div>
+  ` : '';
+  
+  return `
+  <div style="padding: 8px;">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+      <h2 style="margin: 0;">🏦 Monopoly BE</h2>
+      <span class="tag tag-success">Ronda ${GAME.round}</span>
+      <span class="tag tag-${infColor}">Inflación ×${GAME.inflationMultiplier.toFixed(2)}</span>
+      <button onclick="toggleNumeric()" class="btn" style="margin-left: auto; font-size: 11px;">
+        ${SHOW_NUMERIC_METHOD ? 'Ocultar' : 'Ver'} método
+      </button>
+    </div>
+    
+    ${numPanel}
+    
+    <div class="game-container">
+      <div>
+        <div class="card" style="margin-bottom: 10px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-color: #1d4ed8;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+            <div>
+              <div class="sec" style="font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;">Banco Electrónico</div>
+              <div style="font-size: 18px; font-weight: 600; margin-top: 2px;">Cuenta activa: ${cur.token} ${cur.name}</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="sec" style="font-size: 10px;">Saldo disponible</div>
+              <div style="font-size: 22px; font-weight: 700; color: ${getBalanceColor(cur)};">${formatMoney(cur.balance)}</div>
+              <div class="sec" style="font-size: 10px; margin-top: 2px;">
+                Δ ronda: ${getBalanceDelta(cur) >= 0 ? '+' : ''}${formatMoney(getBalanceDelta(cur))}
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
+            <span class="tag tag-success">Propiedades: ${ownedByCurrent.length}</span>
+            <span class="tag tag-warning">Cartas cárcel: ${cur.jailFreeCards || 0}</span>
+            <span class="tag tag-${infColor}">Inflación ×${GAME.inflationMultiplier.toFixed(2)}</span>
+          </div>
+        </div>
+
+        ${boardHTML}
+        
+        <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+          ${GAME.players.map(p => `
+          <span style="font-size: 11px; display: flex; align-items: center; gap: 6px; opacity: ${p.bankrupt ? 0.4 : 1};">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: ${p.color};"></span>
+            ${p.token} ${p.name}: <strong>${p.bankrupt ? '💥' : formatMoney(p.balance)}</strong>
+            ${!p.bankrupt ? `<span class="sec">(${BOARD[p.pos].name})</span>` : ''}
+          </span>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div class="card">
+          <h2 style="margin-top: 0;">Turno Actual</h2>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: ${cur.color};"></span>
+            <span style="font-weight: 600;">${cur.token} ${cur.name}</span>
+          </div>
+          <div style="font-size: 18px; font-weight: 600; color: #10b981; margin-bottom: 6px;">
+            ${formatMoney(cur.balance)}
+          </div>
+          <div style="font-size: 11px; margin-bottom: 6px; color: ${getBalanceColor(cur)};">
+            Δ ronda: ${getBalanceDelta(cur) >= 0 ? '+' : ''}${formatMoney(getBalanceDelta(cur))}
+          </div>
+          <div class="sec" style="margin-bottom: 6px;">${BOARD[cur.pos].name}</div>
+          <div class="sec" style="margin-bottom: 6px; font-size: 11px;">Cartas cárcel: ${cur.jailFreeCards || 0}</div>
+          ${cur.inJail ? `<div style="color: #ef4444; font-size: 11px;">🔒 En cárcel (${cur.jailTurns}/3)</div>` : ''}
+          ${cur.inJail && (cur.jailFreeCards || 0) > 0 ? `<button onclick="useJailFreeCard()" class="btn btn-warning" style="margin-top: 8px; width: 100%;">Usar carta de salida</button>` : ''}
+        </div>
+        
+        ${GAME.diceRoll ? `
+        <div class="card" style="display: flex; justify-content: center; gap: 12px;">
+          ${GAME.diceRoll.map(d => `
+            <div style="width: 48px; height: 48px; background: #334155; border-radius: 4px;
+                        display: flex; align-items: center; justify-content: center;
+                        font-size: 24px; font-weight: 600; border: 1px solid #475569;">
+              ${d}
+            </div>
+          `).join('')}
+        </div>
+        ` : ''}
+        
+        <div style="display: flex; gap: 8px; flex-direction: column;">
+          ${GAME.gamePhase === 'roll' ? `
+            <button onclick="roll()" class="btn btn-primary" style="padding: 10px; font-size: 14px;">
+              🎲 Lanzar Dados
+            </button>
+          ` : ''}
+          
+          ${GAME.gamePhase === 'buy_prompt' && GAME.pending ? `
+            <div class="panel" style="border-left: 3px solid #f59e0b;">
+              <p style="font-weight: 600; margin-bottom: 6px;">¿Comprar?</p>
+              <p class="sec" style="margin-bottom: 4px;">${GAME.pending.name}</p>
+              <p style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">
+                ${formatMoney(GAME.pending.price)}
+              </p>
+              <div style="display: flex; gap: 6px;">
+                <button onclick="buyProp(true)" class="btn btn-success" style="flex: 1;">Comprar</button>
+                <button onclick="buyProp(false)" class="btn" style="flex: 1;">Pasar</button>
+              </div>
+            </div>
+          ` : ''}
+          
+          ${GAME.gamePhase === 'end' ? `
+            <button onclick="endTurn()" class="btn" style="padding: 10px;">
+              Terminar Turno →
+            </button>
+          ` : ''}
+        </div>
+        
+        <div class="panel" style="border-left: 3px solid #334155;">
+          <h2 style="margin-top: 0; margin-bottom: 10px;">Jugadores</h2>
+          ${GAME.players.map(p => `
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; opacity: ${p.bankrupt ? 0.4 : 1};">
+              <span style="font-size: 14px;">${p.token}</span>
+              <span style="flex: 1; font-size: 11px;">${p.name}</span>
+              <span style="font-size: 11px; font-weight: 600; color: ${p.bankrupt ? '#ef4444' : getBalanceColor(p)};">
+                ${p.bankrupt ? '💥' : formatMoney(p.balance)}
+              </span>
+              <span style="font-size: 10px; color: ${p.bankrupt ? '#ef4444' : getBalanceColor(p)}; min-width: 58px; text-align: right;">
+                ${p.bankrupt ? '' : (getBalanceDelta(p) >= 0 ? '+' : '') + formatMoney(getBalanceDelta(p))}
+              </span>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="panel" style="border-left: 3px solid #2563eb;">
+          <h2 style="margin-top: 0; margin-bottom: 10px;">Mis Propiedades</h2>
+          ${ownedByCurrent.length ? ownedByCurrent.map(space => `
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: ${space.color || '#64748b'};"></span>
+              <span style="flex: 1; font-size: 11px;">${space.name}</span>
+              <span style="font-size: 10px; color: #94a3b8;">${GAME.mortgaged[space.id] ? 'Hipotecada' : 'Libre'}</span>
+              ${space.type !== 'tax' && space.type !== 'chance' && space.type !== 'comm' && space.type !== 'go' && space.type !== 'jail' && space.type !== 'park' && space.type !== 'jail2' ? `
+                <button onclick="toggleMortgage(${space.id})" class="btn" style="padding: 3px 8px; font-size: 10px;">${GAME.mortgaged[space.id] ? 'Levantar' : 'Hipotecar'}</button>
+              ` : ''}
+            </div>
+          `).join('') : '<p class="sec" style="font-size: 11px;">Aún no tienes propiedades.</p>'}
+        </div>
+        
+        <div class="panel scroll" style="border-left: 3px solid #334155;">
+          <h2 style="margin-top: 0; margin-bottom: 8px;">Registro</h2>
+          <div class="sec" style="font-size: 10px; margin-bottom: 6px;">Eventos del banco, compras, rentas y tarjetas</div>
+          ${GAME.log.map(entry => `
+            <div class="log-entry">${entry}</div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+    
+    <!-- Modal de Carta -->
+    ${SHOW_CARD_MODAL && CURRENT_CARD ? `
+    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+      <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 2px solid #3b82f6; border-radius: 12px; padding: 30px; max-width: 400px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.8);">
+        <div style="font-size: 28px; margin-bottom: 10px;">${CURRENT_CARD.type}</div>
+        <h2 style="color: #60a5fa; margin: 15px 0; font-size: 20px;">${CURRENT_CARD.text}</h2>
+        <p class="sec" style="margin: 20px 0; font-size: 12px;">Presiona el botón para continuar</p>
+        <button id="card-modal-accept-btn" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 16px; font-weight: 600;">
+          Aceptar
+        </button>
+      </div>
+    </div>
+    ` : ''}
+  </div>
+  `;
+}
+
+function bindSetup() {}
+function bindGame() {}
+function bindGameOver() {}
+
+// Event handlers
+window.selectPlayers = function(n) {
+  NUM_PLAYERS = n;
+  render();
+};
+
+window.startGame = function() {
+  GAME = initGame(NUM_PLAYERS);
+  SCREEN = "game";
+  render();
+};
+
+window.goSetup = function() {
+  SCREEN = "setup";
+  GAME = null;
+  render();
+};
+
+window.roll = function() {
+  processRoll();
+};
+
+window.buyProp = function(shouldBuy) {
+  processBuy(shouldBuy);
+};
+
+window.endTurn = function() {
+  processEndTurn();
+};
+
+window.toggleNumeric = function() {
+  SHOW_NUMERIC_METHOD = !SHOW_NUMERIC_METHOD;
+  render();
+};
+
+window.useJailFreeCard = function() {
+  const currentPlayer = {...GAME.players[GAME.currentPlayerIdx]};
+  if (!currentPlayer.inJail || !(currentPlayer.jailFreeCards || 0)) return;
+  const updatedPlayer = useJailFreeCard(currentPlayer);
+  const players = GAME.players.map(player => player.id === updatedPlayer.id ? updatedPlayer : player);
+  const log = [updatedPlayer.token + " usó una carta de salida de cárcel.", ...GAME.log].slice(0, 40);
+  GAME = {...GAME, players, log};
+  render();
+};
+
+window.toggleMortgage = function(spaceId) {
+  if (!GAME) return;
+  const currentPlayer = {...GAME.players[GAME.currentPlayerIdx]};
+  const ownerId = GAME.properties[spaceId];
+  if (ownerId !== currentPlayer.id) return;
+
+  const space = getSpaceById(spaceId);
+  const mortgaged = {...GAME.mortgaged};
+  let players = [...GAME.players];
+  let log = [...GAME.log];
+
+  if (!mortgaged[spaceId]) {
+    const value = Math.round(space.price / 2);
+    mortgaged[spaceId] = true;
+    currentPlayer.balance += value;
+    players = players.map(player => player.id === currentPlayer.id ? currentPlayer : player);
+    log = ["🏦 " + currentPlayer.token + " hipotecó " + space.name + " y recibió " + formatMoney(value), ...log].slice(0, 40);
+  } else {
+    const cost = Math.round((space.price / 2) * 1.1);
+    if (currentPlayer.balance < cost) {
+      log = ["⏭️ " + currentPlayer.token + " no tiene saldo para levantar la hipoteca de " + space.name, ...log].slice(0, 40);
+      GAME = {...GAME, log};
+      render();
+      return;
+    }
+    mortgaged[spaceId] = false;
+    currentPlayer.balance -= cost;
+    players = players.map(player => player.id === currentPlayer.id ? currentPlayer : player);
+    log = ["🏦 " + currentPlayer.token + " levantó la hipoteca de " + space.name + " por " + formatMoney(cost), ...log].slice(0, 40);
+  }
+
+  GAME = {...GAME, players, mortgaged, log};
+  render();
+};
+
+window.resolveCardModal = function() {
+  if (!CURRENT_CARD || !GAME || GAME.gamePhase !== "card_modal") return;
+  
+  let player = {...GAME.players[GAME.currentPlayerIdx]};
+  let players = [...GAME.players];
+  let log = [...GAME.log];
+  const d1 = GAME.diceRoll[0];
+  const d2 = GAME.diceRoll[1];
+  const isDouble = d1 === d2;
+  const doublesCount = GAME.turnDoublesCount || 0;
+  const nextPhase = isDouble && doublesCount < 3 ? "roll" : "end";
+  
+  const addLog = msg => { log = [msg, ...log].slice(0, 40); };
+  
+  addLog(CURRENT_CARD.type + ": \"" + CURRENT_CARD.text + "\"");
+  
+  const newPlayer = CURRENT_CARD.action(player);
+  const updatedPlayer = {...player, ...newPlayer};
+  
+  if (updatedPlayer.pos !== player.pos) {
+    const resolved = resolveLandingAfterMove(updatedPlayer, players, log, CURRENT_CARD.type);
+    players = resolved.players;
+    log = resolved.log;
+    const finalPhase = resolved.gamePhase || nextPhase;
+    const finalDoublesCount = resolved.turnDoublesCount ?? doublesCount;
+    GAME = {...GAME, players, log, gamePhase: finalPhase, turnDoublesCount: finalDoublesCount, pending: resolved.pending ?? null};
+  } else {
+    players[GAME.currentPlayerIdx] = updatedPlayer;
+    if (updatedPlayer.balance < 0) {
+      players = players.map(pl => pl.id === updatedPlayer.id ? {...pl, bankrupt: true} : pl);
+      addLog("💥 " + updatedPlayer.token + " ¡BANCARROTA!");
+    }
+    GAME = {...GAME, players, log, gamePhase: nextPhase, turnDoublesCount: doublesCount};
+  }
+  
+  SHOW_CARD_MODAL = false;
+  CURRENT_CARD = null;
+  render();
+};
+
+// Event delegation para modal de cartas (persiste a través de renders)
+document.addEventListener("click", (e) => {
+  if (e.target && e.target.id === "card-modal-accept-btn") {
+    resolveCardModal();
+  }
+});
+
+// Initial render
+render();
+</script>
+</body>
+</html>
